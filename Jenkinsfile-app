@@ -1,0 +1,9 @@
+pipeline {
+  agent any
+  stages {
+    stage("SonarQube") { steps { echo "Scanning" } }
+    stage("Docker Build") { steps { echo "Building" } }
+    stage("Push ECR") { steps { echo "Pushing" } }
+    stage("Helm Deploy") { steps { echo "Deploying" } }
+  }
+}

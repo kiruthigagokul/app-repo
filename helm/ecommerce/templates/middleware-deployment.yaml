@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: middleware
+spec:
+  replicas: {{ .Values.middleware.replicas }}
+  selector:
+    matchLabels:
+      app: middleware
+  template:
+    metadata:
+      labels:
+        app: middleware
+    spec:
+      containers:
+      - name: middleware
+        image: {{ .Values.middleware.image }}
+
+        ports:
+        - containerPort: 5000
+
+        env:
+        - name: DB_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: ecommerce-config
+              key: DB_HOST
+
+        - name: DB_USER
+          value: {{ .Values.db.user }}
+
+        - name: DB_PASS
+          valueFrom:
+            secretKeyRef:
+              name: ecommerce-secret
+              key: DB_PASSWORD
+
+        - name: DB_NAME
+          value: {{ .Values.db.name }}
+
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 5000
+          initialDelaySeconds: 10
+          periodSeconds: 5

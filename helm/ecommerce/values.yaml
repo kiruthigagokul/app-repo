@@ -1,0 +1,17 @@
+frontend:
+  image: yourdockerhub/frontend:latest
+  replicas: 2
+
+middleware:
+  image: yourdockerhub/middleware:latest
+  replicas: 2
+
+postgres:
+  image: postgres:14
+  storage: 1Gi
+
+db:
+  host: ecommerce-db
+  name: ordersdb
+  user: admin
+  password: admin123
