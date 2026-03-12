@@ -1,9 +1,9 @@
 frontend:
-  image: yourdockerhub/frontend:latest
+  image: 945219712485.dkr.ecr.ap-south-1.amazonaws.com/frontend
   replicas: 2
 
 middleware:
-  image: yourdockerhub/middleware:latest
+  image: 945219712485.dkr.ecr.ap-south-1.amazonaws.com/middleware
   replicas: 2
 
 postgres:
@@ -14,4 +14,5 @@ db:
   host: ecommerce-db
   name: ordersdb
   user: admin
+
   password: admin123
