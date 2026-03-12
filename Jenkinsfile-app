@@ -1,9 +1,80 @@
 pipeline {
-  agent any
-  stages {
-    stage("SonarQube") { steps { echo "Scanning" } }
-    stage("Docker Build") { steps { echo "Building" } }
-    stage("Push ECR") { steps { echo "Pushing" } }
-    stage("Helm Deploy") { steps { echo "Deploying" } }
-  }
+agent any
+
+```
+environment {
+    AWS_REGION = "ap-south-1"
+    AWS_ACCOUNT_ID = "945219712485"
+    ECR_REGISTRY = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+
+    FRONTEND_IMAGE = "${ECR_REGISTRY}/frontend"
+    MIDDLEWARE_IMAGE = "${ECR_REGISTRY}/middleware"
 }
+
+stages {
+
+    stage('Clone Repository') {
+        steps {
+            git 'https://github.com/kiruthigagokul/app-repo.git'
+        }
+    }
+
+    stage('SonarQube Scan') {
+        environment {
+            scannerHome = tool 'sonar-scanner'
+        }
+        steps {
+            withSonarQubeEnv('sonar') {
+                sh '''
+                $scannerHome/bin/sonar-scanner \
+                -Dsonar.projectKey=ecommerce-app \
+                -Dsonar.sources=. \
+                -Dsonar.host.url=http://SONAR_SERVER_IP:9000 \
+                -Dsonar.login=SONAR_TOKEN
+                '''
+            }
+        }
+    }
+
+    stage('Build Docker Images') {
+        steps {
+            sh '''
+            docker build -t $FRONTEND_IMAGE:latest ./frontend
+            docker build -t $MIDDLEWARE_IMAGE:latest ./middleware
+            '''
+        }
+    }
+
+    stage('Login to ECR') {
+        steps {
+            sh '''
+            aws ecr get-login-password --region $AWS_REGION | \
+            docker login --username AWS --password-stdin $ECR_REGISTRY
+            '''
+        }
+    }
+
+    stage('Push Images to ECR') {
+        steps {
+            sh '''
+            docker push $FRONTEND_IMAGE:latest
+            docker push $MIDDLEWARE_IMAGE:latest
+            '''
+        }
+    }
+
+    stage('Deploy with Helm') {
+        steps {
+            sh '''
+            helm upgrade --install ecommerce ./helm/ecommerce \
+            --set frontend.image=$FRONTEND_IMAGE \
+            --set middleware.image=$MIDDLEWARE_IMAGE
+            '''
+        }
+    }
+
+}
+```
+
+}
+
