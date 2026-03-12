@@ -1,79 +1,91 @@
 pipeline {
-agent any
+    agent any
 
-```
-environment {
-    AWS_REGION = "ap-south-1"
-    AWS_ACCOUNT_ID = "945219712485"
-    ECR_REGISTRY = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
-
-    FRONTEND_IMAGE = "${ECR_REGISTRY}/frontend"
-    MIDDLEWARE_IMAGE = "${ECR_REGISTRY}/middleware"
-}
-
-stages {
-
-    stage('Clone Repository') {
-        steps {
-            git 'https://github.com/kiruthigagokul/app-repo.git'
-        }
+    environment {
+        AWS_REGION = 'ap-south-1'
+        EKS_CLUSTER = 'my_cluster'
+        ECR_REGISTRY = '945219712485.dkr.ecr.ap-south-1.amazonaws.com'
+        FRONTEND_IMAGE = "${ECR_REGISTRY}/frontend:latest"
+        MIDDLEWARE_IMAGE = "${ECR_REGISTRY}/middleware:latest"
+        SONAR_TOKEN = credentials('SONAR_TOKEN')   // Jenkins credential for SonarQube token
     }
 
-    stage('SonarQube Scan') {
-        environment {
-            scannerHome = tool 'sonar-scanner'
+    stages {
+
+        stage('Clone Repository') {
+            steps {
+                git branch : 'main', url :'https://github.com/kiruthigagokul/app-repo.git'
+            }
         }
-        steps {
-            withSonarQubeEnv('sonar') {
-                 withSonarQubeEnv('sonar') {
-                sh '''
-                $scannerHome/bin/sonar-scanner
-            -Dsonar.projectKey=ecommerce-app
-            -Dsonar.sources=.
-                '''
+
+       // stage('SonarQube Scan') {
+         //   steps {
+           //     withSonarQubeEnv('sonar') {
+             //       sh """
+               //     sonar-scanner \
+                 //       -Dsonar.projectKey=ecommerce-app \
+                   //     -Dsonar.sources=. \
+                 //       -Dsonar.host.url=http://43.205.117.243:9000 \
+               //         -Dsonar.token=$SONAR_TOKEN
+             //       """
+           //     }
+         //   }
+       // }
+
+        stage('Build Docker Images') {
+            steps {
+                sh """
+                docker build -t $FRONTEND_IMAGE ./frontend
+                docker build -t $MIDDLEWARE_IMAGE ./middleware
+                """
+            }
+        }
+
+        stage('Push Docker Images to ECR') {
+            steps {
+                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-credentials-gk']]){
+                sh """
+                aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY
+                docker push $FRONTEND_IMAGE
+                docker push $MIDDLEWARE_IMAGE
+                """
+                }
+            }
+        }
+
+        stage('Configure Kubeconfig') {
+            steps {
+                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-credentials-gk']]){
+                sh """
+                aws eks --region $AWS_REGION update-kubeconfig --name $EKS_CLUSTER
+                kubectl get nodes
+                """
+                }
+            }
+        }
+
+        stage('Deploy to EKS via Helm') {
+            steps {
+                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-credentials-gk']]){
+                sh """
+                helm upgrade --install ecommerce ./helm/ecommerce \
+                    --set frontend.image=$FRONTEND_IMAGE \
+                    --set middleware.image=$MIDDLEWARE_IMAGE \
+                    --set db.image=postgres:15
+                """
+                }
+            }
+        }
+
+        stage('Verify Deployment') {
+            steps {
+                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-credentials-gk']]){
+                sh """
+                kubectl get pods
+                kubectl get svc
+                """
+                }
             }
         }
     }
-
-    stage('Build Docker Images') {
-        steps {
-            sh '''
-            docker build -t $FRONTEND_IMAGE:latest ./frontend
-            docker build -t $MIDDLEWARE_IMAGE:latest ./middleware
-            '''
-        }
-    }
-
-    stage('Login to ECR') {
-        steps {
-            sh '''
-            aws ecr get-login-password --region $AWS_REGION | \
-            docker login --username AWS --password-stdin $ECR_REGISTRY
-            '''
-        }
-    }
-
-    stage('Push Images to ECR') {
-        steps {
-            sh '''
-            docker push $FRONTEND_IMAGE:latest
-            docker push $MIDDLEWARE_IMAGE:latest
-            '''
-        }
-    }
-
-    stage('Deploy with Helm') {
-        steps {
-            sh '''
-            helm upgrade --install ecommerce ./helm/ecommerce \
-            --set frontend.image=$FRONTEND_IMAGE \
-            --set middleware.image=$MIDDLEWARE_IMAGE
-            '''
-        }
-    }
-
 }
-```
-
-}
-
