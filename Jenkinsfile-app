@@ -25,12 +25,11 @@ stages {
         }
         steps {
             withSonarQubeEnv('sonar') {
+                 withSonarQubeEnv('sonar') {
                 sh '''
-                $scannerHome/bin/sonar-scanner \
-                -Dsonar.projectKey=ecommerce-app \
-                -Dsonar.sources=. \
-                -Dsonar.host.url=http://SONAR_SERVER_IP:9000 \
-                -Dsonar.login=SONAR_TOKEN
+                $scannerHome/bin/sonar-scanner
+            -Dsonar.projectKey=ecommerce-app
+            -Dsonar.sources=.
                 '''
             }
         }
